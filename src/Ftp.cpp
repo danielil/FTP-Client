@@ -64,17 +64,13 @@ bool getCommand(std::string& command, std::string& param1, std::string& param2)
 		}
 	}
 
-	cout << "Command: [" << command.c_str();
-	cout << "][" << param1.c_str();
-	cout << "][" << param2.c_str();
-	cout << "]" << endl;
-
 	return !command.empty();
 }
 
 int main(int argc, char* argv[])
 {
 	FtpObj ftpObj;
+	bool run = true;
 
 	switch (argc)
 	{
@@ -97,14 +93,14 @@ int main(int argc, char* argv[])
 	std::string param2;
 
 	// Connect
-	while (!ftpObj.IsConnected())
+	while (run && !ftpObj.IsConnected())
 	{
 		cout << "Please provide host info; expected format is:" << endl;
 		cout << "\topen ip [port]" << endl;
 
 		if (!getCommand(command, param1, param2))
 		{
-			break;
+			run = false;
 		}
 		else if ((command.compare("open") == 0) && !param1.empty())
 		{
@@ -120,50 +116,39 @@ int main(int argc, char* argv[])
 	}
 
 	// Login
-	while (ftpObj.IsConnected())
+	while (run)
 	{
-		cout << "Please provide user name; expected format is:" << endl;
-		cout << "\tname: account" << endl;
+		string userString( getlogin( ) );
+		cout << "Name (" << ftpObj.GetHostAddress().c_str() << ":" << userString << "): ";
 
 		if (!getCommand(command, param1, param2))
 		{
-			break;
+			run = false;
 		}
-		else if ((command.compare("name:") == 0) && !param1.empty())
+		else if (ftpObj.SendUserName(command.c_str()))
 		{
-			if (ftpObj.SendUserName(param1.c_str()))
+			cout << "Password: ";
+			if (!getCommand(command, param1, param2))
 			{
-				break;
+				run = false;
 			}
-		}
-	}
-
-	while (ftpObj.IsConnected())
-	{
-		cout << "Please provide user password; expected format is:" << endl;
-		cout << "\tpassword: user_password" << endl;
-
-		if (!getCommand(command, param1, param2))
-		{
-			break;
-		}
-		else if (command.compare("password:") == 0)
-		{
-			if (ftpObj.SendUserPassword(param1.c_str()))
+			else if (ftpObj.SendUserPassword(command.c_str()))
 			{
+				ftpObj.ShowOS();	
+
 				break;
 			}
 		}
 	}
 
 	// Execute commands
-	while (ftpObj.IsConnected())
+	while (run)
 	{
-		cout << "Please enter a command: ";
+		cout << "ftp> ";
 
 		if (!getCommand(command, param1, param2))
 		{
-			break;
+			continue;
 		}
 
 		bool success = false;
@@ -179,6 +164,51 @@ int main(int argc, char* argv[])
 		{
 			success = ftpObj.ListDir();
 		}
+		else if (command.compare("ldname") == 0)
+		{
+			success = ftpObj.ListDirName();
+		}
+		else if (command.compare("currentdir") == 0)
+		{
+			success = ftpObj.GetDir();
+		}
+		else if (command.compare("cdup") == 0)
+		{
+			success = ftpObj.SetDirToParent();
+		}
+		else if (command.compare("removedir") == 0)
+		{
+			if (!param1.empty())
+			{
+				success = ftpObj.RemDir(param1.c_str());
+			}
+		}
+		else if (command.compare("makedir") == 0)
+		{
+			if (!param1.empty())
+			{
+				success = ftpObj.MakeDir(param1.c_str());
+			}
+		}
+		else if (command.compare("reinitialize") == 0)
+		{
+			success = ftpObj.Reinitialize();
+		}
+		else if (command.compare("status") == 0)
+		{
+			success = ftpObj.Status();
+		}
+		else if (command.compare("del") == 0)
+		{
+			if (!param1.empty())
+			{
+				success = ftpObj.DelFile(param1.c_str());
+			}
+		}
+		else if (command.compare("sys") == 0)
+		{
+			success = ftpObj.ShowOS();
+		}
 		else if (command.compare("get") == 0)
 		{
 			if (!param1.empty())
@@ -193,14 +223,29 @@ int main(int argc, char* argv[])
 				success = ftpObj.PutFile(param1.c_str());
 			}
 		}
+		else if (command.compare("type") == 0)
+		{
+			if (!param1.empty())
+			{
+				if (param1 == "binary")
+				{
+					success = ftpObj.SetTransferType(0);
+				}
+				else if (param1 == "ascii")
+				{
+					success = ftpObj.SetTransferType(1);
+				}
+			}
+		}
 		else if (command.compare("close") == 0)
 		{
-			ftpObj.Terminate(false);
+			ftpObj.Terminate();
 			success = true;
 		}
 		else if (command.compare("quit") == 0)
 		{
-			ftpObj.Terminate(true);
+			ftpObj.Terminate();
+			run = false;
 			success = true;
 		}
 

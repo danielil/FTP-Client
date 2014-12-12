@@ -12,10 +12,11 @@
 #include <string>
 #include "FtpObj.h"
 
-const int ERROR_THRESHOLD = 400;                // FTP Error Threshold
-const unsigned long TERMINATE_LATENCY = 400L;   // 400 milliseconds
-
-static void ExecDelay(unsigned long delay);
+#define PASSIVE_MODE_FLAG				"Entering Passive Mode"
+const int CONNECTED_OK					= 220;	// Expected connect reply
+const int USERNAME_OK					= 331;	// Expected USER command reply
+const int ERROR_THRESHOLD				= 400;	// FTP Error Threshold
+const unsigned long TERMINATE_LATENCY	= 500L;	// 500 milliseconds
 
 // Constructor
 FtpObj::FtpObj()
@@ -29,19 +30,19 @@ FtpObj::~FtpObj()
 	Disconnect(true);
 }
 
-// Checks if command socket is connected to the FTP server
+// Checks whether the command socket is connected to the FTP server
 bool FtpObj::IsConnected()
 {
-	return (_commandSocket != NULL) && _commandSocket->IsOperational();
+	return (_commandSocket != NULL);
 }
 
-// Checks if data socket is connected to the FTP server 
+// Checks whether the data socket is connected to the FTP server 
 bool FtpObj::IsDataConnected()
 {
-	return (_dataSocket != NULL) && _dataSocket->IsOperational();
+	return (_dataSocket != NULL);
 }
 
-// Opens an FTP session by connecting the command socket
+// Opens an FTP session by connecting the command socket to the FTP server
 bool FtpObj::Connect(const char* hostAddress, int port)
 {
 	if ((_commandSocket == NULL) &&
@@ -51,9 +52,10 @@ bool FtpObj::Connect(const char* hostAddress, int port)
 		_commandSocket = new FtpSocket();
 		if (_commandSocket->ConnectClientSocket(hostAddress, port))
 		{
-			_hostAddress = hostAddress;
-			if (ReceiveReply())
+			if (ReceiveReply() && (atoi(_message) == CONNECTED_OK))
 			{
+				// Memorize the host address for subsequent data connection
+				_hostAddress = hostAddress;
 				return true;
 			}
 		}
@@ -64,7 +66,9 @@ bool FtpObj::Connect(const char* hostAddress, int port)
 	return (false);
 }
 
-// Disconnects and destroys the command, the data and the listening sockets 
+// Disconnects and destroys the command and the data sockets.
+// If full == true, then it disconnects both sockets;
+// Otherwise, it disconnects only the data socket.
 void FtpObj::Disconnect(bool full)
 {
 	StopDataConnection(true);
@@ -78,7 +82,8 @@ void FtpObj::Disconnect(bool full)
 	}
 }
 
-// Sends an FTP command with or without parameters to the FTP server. 
+// Sends an FTP command with or without parameters to the FTP server.
+// It checks the response and returns true if successful.
 bool FtpObj::FtpCommand(const char* command, const char* param)
 {
 	if (IsConnected() && (command != NULL))
@@ -103,50 +108,36 @@ bool FtpObj::FtpCommand(const char* command, const char* param)
 }
 
 // Terminates all connections and optionally, quits FTP. 
-void FtpObj::Terminate(bool quit)
+void FtpObj::Terminate()
 {
-	bool connected = false;
-
-	if (quit)
+	if (IsConnected())
 	{
-		connected = IsConnected();
-		if (connected)
-		{
-			FtpCommand("QUIT");
-		}
-	}
-
-	Disconnect(true);
-	Init();
-  
-	if (connected)
-	{
-		ExecDelay(TERMINATE_LATENCY);
+		FtpCommand("QUIT");
+		Disconnect(true);
 	}
 }
-
 
 // Sets the type of the transfer to Binary or ASCII (TYPE command) 
 bool FtpObj::SetTransferType(bool bType)
 {
-   if (IsConnected())
-   {
-	   if (FtpCommand("TYPE", (bType ? "A" : "I")))
-	   {
-		   _transferType = bType;
-		   return true;
-	   }
-   }
+	if (IsConnected())
+	{
+		if (FtpCommand("TYPE", (bType ? "A" : "I")))
+		{
+			_transferType = bType;
+			return true;
+		}
+	}
 
    return false;
 }
 
-// Sends the user name to the FTP server
+// Sends the user name to the FTP server (USER command)
 bool FtpObj::SendUserName(const char* name)
 {
 	if (IsConnected() && (name != NULL))
 	{
-		if (FtpCommand("USER", name))
+		if (FtpCommand("USER", name) && (atoi(_message) == USERNAME_OK))
 		{
 			return true;
 		}
@@ -155,18 +146,33 @@ bool FtpObj::SendUserName(const char* name)
 	return false;
 }
 
-// Sends the user name to the FTP server
+// Sends the user password to the FTP server (PASS command)
 bool FtpObj::SendUserPassword(const char* password)
 {
 	if (IsConnected() && (password != NULL))
 	{
 		if (FtpCommand("PASS", password))
 		{
-			if (FtpCommand("SYST"))
+			if (!ReceiveReply())
 			{
-				std::cout << _message << std::endl;
-				return true;
+				return false;
 			}
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Displays the operating system (SYST command)
+bool FtpObj::ShowOS()
+{
+	if (IsConnected())
+	{
+		if (FtpCommand("SYST"))
+		{
+			return true;
 		}
 	}
 
@@ -183,8 +189,10 @@ bool FtpObj::ListDir(void)
 		if (StartDataConnection("LIST", NULL))
 		{
 			success = true;
+
 			while (success)
 			{
+				// Retrieves the directory content and displays it on the console
 				memset(_message, 0, sizeof(_message));
 				int numBytes = _dataSocket->ReceiveMessage((void *)_message, sizeof(_message)-1);
 				if (numBytes == 0)
@@ -192,12 +200,45 @@ bool FtpObj::ListDir(void)
 					break;
 				}
 
+				// Display the data retrieved
 				std::cout << _message;
-
 			}
-
-			StopDataConnection(!success);
 			std::cout << std::endl;
+
+			StopDataConnection(false);
+		}
+	}
+
+	return success;
+}
+
+// Retrieves only the names of the present working directory (NLST command) 
+bool FtpObj::ListDirName(void)
+{
+	bool success = false;
+
+	if (IsConnected())
+	{
+		if (StartDataConnection("NLST", NULL))
+		{
+			success = true;
+
+			while (success)
+			{
+				// Retrieves the directory content and displays it on the console
+				memset(_message, 0, sizeof(_message));
+				int numBytes = _dataSocket->ReceiveMessage((void *)_message, sizeof(_message)-1);
+				if (numBytes == 0)
+				{
+					break;
+				}
+
+				// Display the data retrieved
+				std::cout << _message;
+			}
+			std::cout << std::endl;
+
+			StopDataConnection(false);
 		}
 	}
 
@@ -205,20 +246,20 @@ bool FtpObj::ListDir(void)
 }
 
 // Retrieves the present working directory (PWD command) 
-const char* FtpObj::GetDir(void)
+bool FtpObj::GetDir()
 {
 	if (IsConnected())
 	{
 		if (FtpCommand("PWD"))
 		{
-			return _message;
+			return true;
 		}
 	}
 
 	return NULL;
 }
 
-// Changes the directory on the the FTP server (CWD command) 
+// Changes the current directory on the the FTP server (CWD command) 
 bool FtpObj::SetDir(const char* directory)
 {
 	if (IsConnected() && (directory != NULL))
@@ -232,7 +273,93 @@ bool FtpObj::SetDir(const char* directory)
 	return false;
 }
 
-// Gets file from the FTP server (RETR command)
+// Changes the current directory to the parent directory (CDUP command)
+bool FtpObj::SetDirToParent()
+{
+	if (IsConnected())
+	{
+		if (FtpCommand("CDUP"))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Removes the selected directory on the FTP server (RMD command)
+// This functions doesn’t support recursive deletion (if the folder has files in it),
+// and will fail if the folder is not empty.
+bool FtpObj::RemDir(const char* directory)
+{
+	if (IsConnected() && (directory != NULL))
+	{
+		if (FtpCommand("RMD", directory))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Makes a directory on the server (MKD command)
+bool FtpObj::MakeDir(const char* directory)
+{
+	if (IsConnected() && (directory != NULL))
+	{
+		if (FtpCommand("MKD", directory))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Terminate the USER session and purge all account information (REIN command)
+bool FtpObj::Reinitialize()
+{
+	if (IsConnected())
+	{
+		if (FtpCommand("REIN"))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Returns server status (STAT command)
+bool FtpObj::Status()
+{
+	if (IsConnected())
+	{
+		if (FtpCommand("STAT"))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Delete a file from the FTP server (DELE command)
+bool FtpObj::DelFile(const char* fileName)
+{
+	if (IsConnected() && (fileName != NULL))
+	{
+		if (FtpCommand("DELE", fileName))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Downloads a file from the FTP server (RETR command)
 bool FtpObj::GetFile(const char* fileName)
 {
 	bool success = false;
@@ -242,11 +369,13 @@ bool FtpObj::GetFile(const char* fileName)
 		FILE* fp = fopen(fileName, (_transferType ? "wt" : "wb"));
 		if (fp != NULL)
 		{
+			SetTransferType(_transferType);
 			if (StartDataConnection("RETR", fileName))
 			{
 				success = true;
 				while (success)
 				{
+					// Get data from server and writes to the local file
 					memset(_message, 0, sizeof(_message));
 					int numBytes = _dataSocket->ReceiveMessage((void *)_message, sizeof(_message));
 					if (numBytes == 0)
@@ -255,16 +384,16 @@ bool FtpObj::GetFile(const char* fileName)
 					}
 					fwrite((const void*)_message, sizeof(char), numBytes, fp);
 				}
-				StopDataConnection(!success);
+				StopDataConnection(false);
 			}
 			fclose(fp);
 		}
 	}
 
-   return success;
+	return success;
 }
 
-// Puts file into the FTP server (STOR command)
+// Uploads a file to the FTP server (STOR command)
 bool FtpObj::PutFile(const char* fileName)
 {
 	bool success = false;
@@ -274,11 +403,13 @@ bool FtpObj::PutFile(const char* fileName)
 		FILE* fp = fopen(fileName, (_transferType ? "rt" : "rb"));
 		if (fp != NULL)
 		{
+			SetTransferType(_transferType);
 			if (StartDataConnection("STOR", fileName))
 			{
 				success = true;
 				while (success && (feof(fp) == 0))
 				{
+					// Reads file content and sends it to the server
 					memset(_message, 0, sizeof(_message));
 					int numBytes = fread((void *)_message, sizeof(char), sizeof(_message), fp);
 					if (numBytes == 0)
@@ -292,7 +423,7 @@ bool FtpObj::PutFile(const char* fileName)
 						break;
 					}
 				}
-				StopDataConnection(!success);
+				StopDataConnection(false);
 			}
 			fclose(fp);
 		}
@@ -312,14 +443,18 @@ void FtpObj::Init()
 	_dataPort = 0;
 }
 
-// Sends the PASV request to the serve, forcing it to start listening. 
+// Sends the PASV request to the server, forcing it to start listening. 
+// The response should include the host address and the data port;
+// since we saved the host address at connection time, we only retrieve
+// the data port.
 bool FtpObj::SendPASV()
 {
-	if (FtpCommand("PASV", "A"))
+	if (FtpCommand("PASV"))
 	{
 		std::string msg = _message;
 
-		if (msg.find("Entering Passive Mode") == std::string::npos)
+		// Wait for Passive mode indicator
+		if (msg.find(PASSIVE_MODE_FLAG) == std::string::npos)
 		{
 			if (!ReceiveReply())
 			{
@@ -327,9 +462,14 @@ bool FtpObj::SendPASV()
 			}
 		}
 
+		// Parse the response to retrieve the data port
+		// The expected response includes the following sequence of numbers:
+		//      A1, A2, A3, A4, P1, P2 
+		// where A1.A2.A3.A4 is the IP address of the host, while
+		// P1 and P2 should be used to calculate the port number:
+		//      Data port = P1 * 256 + P2
 		int nPort = 0;
 
-		// Retrieve the data port
 		for (int nPos = 1, i = strlen(_message) - 1; i > 0; i--)
 		{
 			if (isdigit((int)_message[i]))
@@ -367,8 +507,6 @@ bool FtpObj::StartDataConnection(const char* dataCommand, const char* dataParam)
 	{
 		FtpSocket* pDataSocket = new FtpSocket();
 
-		std::cout << _hostAddress.c_str() << " " << _dataPort << std::endl;
-
 		if (pDataSocket->ConnectClientSocket(_hostAddress.c_str(), _dataPort))
 		{
 			_dataSocket = pDataSocket;
@@ -390,27 +528,29 @@ bool FtpObj::StartDataConnection(const char* dataCommand, const char* dataParam)
 	return (false);
 }
 
-// Disconnects the socket used for data transfer. 
+// Disconnects the socket used for data transfer.
+// If "abort" flag is not set, the we wait for a server reply. 
 void FtpObj::StopDataConnection(bool abort)
 {
-   if (_dataSocket != NULL)
-   {
-	  delete _dataSocket;
-	  _dataSocket = NULL;
-   }
+	if (_dataSocket != NULL)
+	{
+		delete _dataSocket;
+		_dataSocket = NULL;
+	}
 
-   if (!abort)
-   {
-	  ReceiveReply();
-   }
+	if (!abort)
+	{
+		ReceiveReply();
+	}
 }
 
-// Sends a command message to the FTP server and retrieves the reply
+// Sends a command message to the FTP server and retrieves the reply.
+// If the reply includes an TCP/IP transfer code < 400, then we consider
+// that the command transmission was successful.
 bool FtpObj::SendCommand()
 {
 	if (IsConnected())
 	{
-		std::cout << "SEND: " << _message << std::endl;
 		if (_commandSocket->SendMessage((void *)_message, strlen(_message)))
 		{
 			if (ReceiveReply())
@@ -437,7 +577,7 @@ bool FtpObj::ReceiveReply()
 			int nPos = 0;
 			int maxPos = (int)sizeof(_message) - 5;
 
-			std::cout << "RECEIVE: " << _message << std::endl;
+			std::cout << _message;
 			while (!success && (nPos < maxPos) &&
 				((_message[nPos + 0] == '-') ||
 				((_message[nPos + 1] == ' ') &&
@@ -474,10 +614,7 @@ bool FtpObj::ReceiveReply()
 	return success;
 }
 
-void ExecDelay(unsigned long delay)
+std::string FtpObj::GetHostAddress()
 {
-	if (delay != 0L)
-	{
-		sleep(delay / 1000);
-	}
+	return _hostAddress;
 }
