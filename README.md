@@ -11,7 +11,7 @@ license: `MIT License (MIT), http://opensource.org/licenses/MIT`
 author: `Daniel Sebastian Iliescu, http://dansil.net`  
 created: `2014-12-12`  
 
-Demo
+Usage
 ------------------
 
 You can compile the client using g++ with the following syntax:
