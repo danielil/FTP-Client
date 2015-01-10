@@ -6,9 +6,9 @@ An FTP Client Running in Passive Mode and implemented in C++.
 About
 ------------------
 
-version: `1.0.0`
-author: `Daniel Sebastian Iliescu, http://dansil.net`
-created: `2014-12-12`
+version: `1.0.0`  
+author: `Daniel Sebastian Iliescu, http://dansil.net`  
+created: `2014-12-12`  
 
 Demo
 ------------------
