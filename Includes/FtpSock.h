@@ -1,10 +1,9 @@
 /**
-* @author Daniel Sebastian Iliescu
-* @file FtpSock.h
-* @date 2014-12-12
-
-* This file contains the definition of the FTP socket wrapper class
-*/
+ * Daniel Sebastian Iliescu, http://dansil.net
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ *
+ * This file contains the definition of the FTP socket wrapper classic
+ */
 
 extern "C"
 {
