@@ -1,10 +1,11 @@
 /**
-* @author Daniel Sebastian Iliescu
-* @file Ftp.cpp
-* @date 2014-12-12
+ * Daniel Sebastian Iliescu, http://dansil.net
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ *
+ * This file contains main entry point of the program.
+ */
 
-* This file contains main entry point of the program.
-*/
+#include "ftp_processor.hpp"
 
 #include <iostream>
 #include <stdio.h>
@@ -12,8 +13,6 @@
 #include <string>
 
 using namespace std;
-
-#include "FtpObj.h"
 
 bool getCommand(std::string& command, std::string& param1, std::string& param2)
 {

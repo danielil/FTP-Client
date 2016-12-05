@@ -1,16 +1,16 @@
 /**
-* @author Daniel Sebastian Iliescu
-* @file FtpObj.cpp
-* @date 2014-12-12
+ * Daniel Sebastian Iliescu, http://dansil.net
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ *
+ * This file contains the implementation of the FTP object class
+ */
 
-* This file contains the implementation of the FTP object class
-*/
+#include "ftp_processor.hpp"
 
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
-#include "FtpObj.h"
 
 #define PASSIVE_MODE_FLAG				"Entering Passive Mode"
 const int CONNECTED_OK					= 220;	// Expected connect reply

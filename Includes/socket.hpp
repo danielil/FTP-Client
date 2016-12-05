@@ -2,55 +2,65 @@
  * Daniel Sebastian Iliescu, http://dansil.net
  * MIT License (MIT), http://opensource.org/licenses/MIT
  *
- * This file contains the definition of the FTP socket wrapper classic
+ * This file contains the definition of a socket wrapper.
  */
 
-extern "C"
-{
-	#include <sys/types.h>		// socket, bind
-	#include <sys/socket.h>		// socket, bind, listen, inet_ntoa
-	#include <netinet/in.h>		// htonl, htons, inet_ntoa
-	#include <arpa/inet.h>		// inet_ntoa
-	#include <netdb.h>			// gethostbyname
-	#include <unistd.h>			// read, write, close
-	#include <string.h>			// bzero
-	#include <netinet/tcp.h>	// TCP_NODELAY
-	#include <stdlib.h>
-	#include <stdio.h>
-}
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <string.h>
+#include <netinet/tcp.h>
+#include <stdlib.h>
+#include <stdio.h>
 
-typedef int SOCKET;
-typedef struct sockaddr SOCKADDR;
-typedef struct sockaddr_in SOCKADDR_IN;
-typedef struct hostent* LPHOSTENT;
-typedef struct in_addr* LPIN_ADDR;
+using SOCKET = int;
+using SOCKADDR = struct sockaddr;
+using SOCKADDR_IN = struct sockaddr_in;
+using LPHOSTENT = struct hostent*;
+using LPIN_ADDR = struct in_addr*;
 
-#define INVALID_SOCKET (SOCKET)(-1)
-#define SOCKET_ERROR (-1)
+static constexpr auto INVALID_SOCKET = -1;
+static constexpr auto SOCKET_ERROR = -1;
 
-const int DEFAULT_FTP_PORT = 21;	// Default FTP port
-const int CONNECT_RETRIES = 10;		// max. no. of connect retries
+// Default FTP port
+static constexpr auto DEFAULT_FTP_PORT = 21;
 
-void ShowError(const char* msg);
+// Max number of connection retries
+static constexpr auto CONNECT_RETRIES = 10;
 
-class FtpSocket
+void show_error( std::string const & message );
+
+class socket
 {
 public:
-	FtpSocket(void);
-	virtual ~FtpSocket(void);
+	socket() = default;
+	virtual ~socket() noexcept;
 
-	SOCKET GetSocketHandle(void) { return (_socket); }
+	socket( socket const & ) = delete;
+	socket( socket&& ) = delete;
+	
+	socket& operator=( socket const & ) = delete;
+	socket& operator=( socket&& ) = delete;
+	
+	SOCKET get_socket_handle();
 
-	// Operations
-	void Close(void);
-	bool ConnectClientSocket(const char* hostAddress, int port = 0);
-	int SendMessage(void* pDataBuffer, int nDataSize);
-	int ReceiveMessage(void* pDataBuffer, int nBufferSize);
-	int ReceiveMessageAll(void* pDataBuffer, int nBufferSize);
+	void close();
+	bool connect_client_socket(
+		std::string const & host_address,
+		int port = 0 );
+	int send_message(
+		void* buffer,
+		int buffer_size );
+	int receive_message(
+		void* buffer,
+		std::size_t buffer_size );
+	int receive_message_all(
+		void* buffer,
+		std::size_t buffer_size );
 
 private:
-	FtpSocket(const FtpSocket&);
-	FtpSocket& operator =(const FtpSocket&);
-
-	SOCKET _socket; // socket handle
+	SOCKET socket;
 };

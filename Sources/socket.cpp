@@ -1,12 +1,11 @@
 /**
-* @author Daniel Sebastian Iliescu
-* @file FtpSock.cpp
-* @date 2014-12-12
+ * Daniel Sebastian Iliescu, http://dansil.net
+ * MIT License (MIT), http://opensource.org/licenses/MIT
+ *
+ * This file contains the implementation of the FTP socket wrapper class
+ */
 
-* This file contains the implementation of the FTP socket wrapper class
-*/
-
-#include "FtpSock.h"	// FtpSocket
+#include "socket.hpp"
 
 void ShowError(const char* msg)
 {
