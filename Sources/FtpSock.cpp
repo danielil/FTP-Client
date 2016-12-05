@@ -22,8 +22,6 @@ FtpSocket::~FtpSocket(void)
 
 void FtpSocket::Close(void)
 {
-	bool bSuccess = true;
-
 	close(_socket);
 }
 
