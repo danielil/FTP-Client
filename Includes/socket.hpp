@@ -1,66 +1,50 @@
 /**
  * Daniel Sebastian Iliescu, http://dansil.net
  * MIT License (MIT), http://opensource.org/licenses/MIT
- *
- * This file contains the definition of a socket wrapper.
  */
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <string.h>
-#include <netinet/tcp.h>
-#include <stdlib.h>
-#include <stdio.h>
+#ifdef __linux__
+	using SOCKET = int;
+#elif _WIN32
+	#include <WinSock2.h>
+#endif
 
-using SOCKET = int;
-using SOCKADDR = struct sockaddr;
-using SOCKADDR_IN = struct sockaddr_in;
-using LPHOSTENT = struct hostent*;
-using LPIN_ADDR = struct in_addr*;
+#include <stdint.h>
+#include <string>
 
-static constexpr auto INVALID_SOCKET = -1;
-static constexpr auto SOCKET_ERROR = -1;
-
-// Default FTP port
-static constexpr auto DEFAULT_FTP_PORT = 21;
-
-// Max number of connection retries
-static constexpr auto CONNECT_RETRIES = 10;
-
-void show_error( std::string const & message );
-
-class socket
+namespace networking
 {
-public:
-	socket() = default;
-	virtual ~socket() noexcept;
+	class socket
+	{
+	public:
 
-	socket( socket const & ) = delete;
-	socket( socket&& ) = delete;
-	
-	socket& operator=( socket const & ) = delete;
-	socket& operator=( socket&& ) = delete;
-	
-	SOCKET get_socket_handle();
+		socket() = default;
+		virtual ~socket() noexcept;
 
-	void close();
-	bool connect_client_socket(
-		std::string const & host_address,
-		int port = 0 );
-	int send_message(
-		void* buffer,
-		int buffer_size );
-	int receive_message(
-		void* buffer,
-		std::size_t buffer_size );
-	int receive_message_all(
-		void* buffer,
-		std::size_t buffer_size );
+		socket( socket const & ) = delete;
+		socket( socket&& ) noexcept = delete;
 
-private:
-	SOCKET socket;
-};
+		socket& operator=( socket const & ) = delete;
+		socket& operator=( socket&& ) noexcept = delete;
+
+		bool is_connected() const noexcept;
+
+		bool connect_client_socket(
+			std::string const & host_address,
+			std::uint16_t port = 0 ) noexcept;
+		void close() noexcept;
+
+		int send_message(
+			void* buffer,
+			std::size_t buffer_size ) const noexcept;
+		int receive_message(
+			void* buffer,
+			std::size_t buffer_size ) const noexcept;
+		int receive_message_all(
+			void* buffer,
+			std::size_t buffer_size ) const noexcept;
+
+	private:
+		SOCKET socket_handle = 0;
+	};
+}

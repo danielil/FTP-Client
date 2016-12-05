@@ -1,20 +1,20 @@
 /**
  * Daniel Sebastian Iliescu, http://dansil.net
  * MIT License (MIT), http://opensource.org/licenses/MIT
- *
- * This file contains main entry point of the program.
  */
 
 #include "ftp_processor.hpp"
 
 #include <iostream>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string>
 
-using namespace std;
+#ifdef _WIN32
+	#include <Windows.h>
+	#include <lmcons.h>
+#endif
 
-bool getCommand(std::string& command, std::string& param1, std::string& param2)
+bool get_command(std::string& command, std::string& param1, std::string& param2)
 {
 	std::string line;
 	int index = 0;
@@ -23,7 +23,7 @@ bool getCommand(std::string& command, std::string& param1, std::string& param2)
 	param1.clear();
 	param2.clear();
 
-	getline(cin, line);
+	getline(std::cin, line);
 
 	while (!line.empty())
 	{
@@ -68,7 +68,7 @@ bool getCommand(std::string& command, std::string& param1, std::string& param2)
 
 int main(int argc, char* argv[])
 {
-	FtpObj ftpObj;
+	networking::ftp_processor ftpObj;
 	bool run = true;
 
 	switch (argc)
@@ -78,12 +78,12 @@ int main(int argc, char* argv[])
 		break;
 
 	case 2:
-		ftpObj.Connect(argv[1]);
+		ftpObj.connect(argv[1]);
 		break;
 
 	case 3:
 	default:
-		ftpObj.Connect(argv[1], atoi(argv[2]));
+		ftpObj.connect(argv[1], atoi(argv[2]));
 		break;
 	}
 
@@ -92,12 +92,12 @@ int main(int argc, char* argv[])
 	std::string param2;
 
 	// Connect
-	while (run && !ftpObj.IsConnected())
+	while (run && !ftpObj.is_connected())
 	{
-		cout << "Please provide host info; expected format is:" << endl;
-		cout << "\topen ip [port]" << endl;
+		std::cout << "Please provide host info; expected format is:" << std::endl;
+		std::cout << "\topen ip [port]" << std::endl;
 
-		if (!getCommand(command, param1, param2))
+		if (!get_command(command, param1, param2))
 		{
 			run = false;
 		}
@@ -105,11 +105,11 @@ int main(int argc, char* argv[])
 		{
 			if (param2.empty())
 			{
-				ftpObj.Connect(param1.c_str());
+				ftpObj.connect(param1);
 			}
 			else
 			{
-				ftpObj.Connect(param1.c_str(), atoi(param2.c_str()));
+				ftpObj.connect(param1, atoi(param2.c_str()));
 			}
 		}
 	}
@@ -117,23 +117,29 @@ int main(int argc, char* argv[])
 	// Login
 	while (run)
 	{
+#ifdef __linux__
 		string userString( getlogin( ) );
-		cout << "Name (" << ftpObj.GetHostAddress().c_str() << ":" << userString << "): ";
+#elif _WIN32
+		char userString[UNLEN + 1];
+		DWORD username_len = UNLEN + 1;
+		GetUserNameA( userString, &username_len );
+#endif
+		std::cout << "Name (" << ftpObj.get_host_address() << ":" << userString << "): ";
 
-		if (!getCommand(command, param1, param2))
+		if (!get_command(command, param1, param2))
 		{
 			run = false;
 		}
-		else if (ftpObj.SendUserName(command.c_str()))
+		else if (ftpObj.send_user_name(command))
 		{
-			cout << "Password: ";
-			if (!getCommand(command, param1, param2))
+			std::cout << "Password: ";
+			if (!get_command(command, param1, param2))
 			{
 				run = false;
 			}
-			else if (ftpObj.SendUserPassword(command.c_str()))
+			else if (ftpObj.send_user_password(command))
 			{
-				ftpObj.ShowOS();	
+				ftpObj.show_os();
 
 				break;
 			}
@@ -143,9 +149,9 @@ int main(int argc, char* argv[])
 	// Execute commands
 	while (run)
 	{
-		cout << "ftp> ";
+		std::cout << "ftp> ";
 
-		if (!getCommand(command, param1, param2))
+		if (!get_command(command, param1, param2))
 		{
 			continue;
 		}
@@ -156,70 +162,70 @@ int main(int argc, char* argv[])
 		{
 			if (!param1.empty())
 			{
-				success = ftpObj.SetDir(param1.c_str());
+				success = ftpObj.set_directory(param1);
 			}
 		}
 		else if (command.compare("ls") == 0)
 		{
-			success = ftpObj.ListDir();
+			success = ftpObj.list_directories();
 		}
 		else if (command.compare("ldname") == 0)
 		{
-			success = ftpObj.ListDirName();
+			success = ftpObj.list_directory_name();
 		}
 		else if (command.compare("currentdir") == 0)
 		{
-			success = ftpObj.GetDir();
+			success = ftpObj.get_directory();
 		}
 		else if (command.compare("cdup") == 0)
 		{
-			success = ftpObj.SetDirToParent();
+			success = ftpObj.set_directory_to_parent();
 		}
 		else if (command.compare("removedir") == 0)
 		{
 			if (!param1.empty())
 			{
-				success = ftpObj.RemDir(param1.c_str());
+				success = ftpObj.remove_directory(param1);
 			}
 		}
 		else if (command.compare("makedir") == 0)
 		{
 			if (!param1.empty())
 			{
-				success = ftpObj.MakeDir(param1.c_str());
+				success = ftpObj.make_directory(param1);
 			}
 		}
 		else if (command.compare("reinitialize") == 0)
 		{
-			success = ftpObj.Reinitialize();
+			success = ftpObj.reinitialize();
 		}
 		else if (command.compare("status") == 0)
 		{
-			success = ftpObj.Status();
+			success = ftpObj.status();
 		}
 		else if (command.compare("del") == 0)
 		{
 			if (!param1.empty())
 			{
-				success = ftpObj.DelFile(param1.c_str());
+				success = ftpObj.delete_file(param1);
 			}
 		}
 		else if (command.compare("sys") == 0)
 		{
-			success = ftpObj.ShowOS();
+			success = ftpObj.show_os();
 		}
 		else if (command.compare("get") == 0)
 		{
 			if (!param1.empty())
 			{
-				success = ftpObj.GetFile(param1.c_str());
+				success = ftpObj.get_file(param1);
 			}
 		}
 		else if (command.compare("put") == 0)
 		{
 			if (!param1.empty())
 			{
-				success = ftpObj.PutFile(param1.c_str());
+				success = ftpObj.put_file(param1);
 			}
 		}
 		else if (command.compare("type") == 0)
@@ -228,30 +234,30 @@ int main(int argc, char* argv[])
 			{
 				if (param1 == "binary")
 				{
-					success = ftpObj.SetTransferType(0);
+					success = ftpObj.set_transfer_type( false );
 				}
 				else if (param1 == "ascii")
 				{
-					success = ftpObj.SetTransferType(1);
+					success = ftpObj.set_transfer_type( true );
 				}
 			}
 		}
 		else if (command.compare("close") == 0)
 		{
-			ftpObj.Terminate();
+			ftpObj.terminate();
 			success = true;
 		}
 		else if (command.compare("quit") == 0)
 		{
-			ftpObj.Terminate();
+			ftpObj.terminate();
 			run = false;
 			success = true;
 		}
 
 		if (!success)
 		{
-			cout << command.c_str() << " " << param1.c_str();
-			cout << " failed" << endl;
+			std::cout << command << " " << param1;
+			std::cout << " failed" << std::endl;
 		}
 	}
 	

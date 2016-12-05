@@ -1,143 +1,186 @@
 /**
  * Daniel Sebastian Iliescu, http://dansil.net
  * MIT License (MIT), http://opensource.org/licenses/MIT
- *
- * This file contains the implementation of the FTP socket wrapper class
  */
 
 #include "socket.hpp"
 
-void ShowError(const char* msg)
-{
-	perror(msg);
-}
+#ifdef __linux__
+	#include <sys/socket.h>
+	#include <netinet/in.h>
+	#include <arpa/inet.h>
+	#include <netdb.h>
+	#include <unistd.h>
+	#include <netinet/tcp.h>
 
-FtpSocket::FtpSocket(void) { }
+	using SOCKADDR = struct sockaddr;
+	using SOCKADDR_IN = struct sockaddr_in;
+	using LPHOSTENT = struct hostent*;
+	using LPIN_ADDR = struct in_addr*;
 
-FtpSocket::~FtpSocket(void)
-{
-	Close();
-}
+	static constexpr auto SOCKET_ERROR = -1;
+#elif _WIN32
+	#include <WinSock2.h>
+#endif
 
-void FtpSocket::Close(void)
-{
-	close(_socket);
-}
+#include <iostream>
 
-// Connects the socket to the given host through specified communication port
-bool FtpSocket::ConnectClientSocket(const char* hostAddress, int port)
+namespace networking
 {
-	if (hostAddress == NULL)
+	socket::~socket() noexcept
 	{
-		return false;
+		this->close();
 	}
 
-	if (port == 0)
+	bool
+	socket::is_connected() const noexcept
 	{
-		port = DEFAULT_FTP_PORT;
+		return ( this->socket_handle != INVALID_SOCKET );
 	}
 
-	// Fill in the data needed for connecting to the server.
-	SOCKADDR_IN sockAddr;
-
-	memset(&sockAddr, 0, sizeof(SOCKADDR_IN));
-	sockAddr.sin_family = AF_INET;
-	sockAddr.sin_addr.s_addr = inet_addr(hostAddress);
-	sockAddr.sin_port = htons(port);
-
-	if (sockAddr.sin_addr.s_addr == INADDR_NONE)
+	// Connects the socket to the given host through specified communication port
+	bool
+	socket::connect_client_socket(
+		std::string const & host_address,
+		std::uint16_t port ) noexcept
 	{
-		LPHOSTENT pHost = gethostbyname(hostAddress);
-
-		if (pHost == NULL)
+		if ( port == 0 )
 		{
-			ShowError("Cannot find hostname.");
+			static constexpr auto default_ftp_port = 21;
+
+			port = default_ftp_port;
+		}
+
+		// Fill in the data needed for connecting to the server.
+		SOCKADDR_IN sock_addr = {};
+
+		sock_addr.sin_family = AF_INET;
+		sock_addr.sin_addr.s_addr = ::inet_addr( host_address.c_str() );
+		sock_addr.sin_port = ::htons( port );
+
+		if ( sock_addr.sin_addr.s_addr == INADDR_NONE )
+		{
+			LPHOSTENT host = ::gethostbyname( host_address.c_str() );
+
+			if ( host == nullptr )
+			{
+				std::cerr << "Cannot find hostname.";
+				return false;
+			}
+
+			const auto internet_address = reinterpret_cast< LPIN_ADDR >( *host->h_addr_list );
+			sock_addr.sin_addr.s_addr = ::inet_addr( ::inet_ntoa( *internet_address ) );
+		}
+
+		// Open a TCP socket (an Internet stream socket)
+		this->socket_handle = ::socket( AF_INET, SOCK_STREAM, 0 );
+
+		if ( this->socket_handle == INVALID_SOCKET )
+		{
+			std::cerr << "Cannot open a client TCP socket.";
 			return false;
 		}
 
-		LPIN_ADDR pInAddr = (LPIN_ADDR)(*pHost->h_addr_list);
-		sockAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*pInAddr));
-	}
-
-	// Open a TCP socket (an Internet stream socket)
-	_socket = socket(AF_INET, SOCK_STREAM, 0);
-	if (_socket < 0)
-	{
-		ShowError("Cannot open a client TCP socket.");
-		return false;
-	}
-
-	// Connect to the server
-	int pass = 0;
-	while (connect(_socket, (const SOCKADDR*)&sockAddr, sizeof(sockAddr)) == SOCKET_ERROR)
-	{
-		if (++pass >= CONNECT_RETRIES)
+		// Connect to the server
+		auto pass = 0;
+		while ( ::connect( this->socket_handle, reinterpret_cast< const SOCKADDR* >( &sock_addr ), sizeof( sock_addr ) ) == SOCKET_ERROR )
 		{
-			Close();
-			ShowError("Cannot connect client TCP socket.");
-			return false;
+			// Max number of connection retries
+			static constexpr auto connection_retries = 10;
+
+			if ( ++pass >= connection_retries )
+			{
+				this->close();
+
+				std::cerr << "Cannot connect client TCP socket.";
+				return false;
+			}
 		}
+
+		return true;
 	}
 
-	return true;
-}
-
-// Sends a message to partner socket
-int FtpSocket::SendMessage(void* pDataBuffer, int dataSize)
-{
-	int noBytes = 0;	// number of bytes sent
-
-	if ((pDataBuffer != NULL) && (dataSize > 0))
+	void
+	socket::close() noexcept
 	{
-		noBytes = send(_socket, (char *)pDataBuffer, dataSize, 0);
-		if (noBytes == SOCKET_ERROR)
-		{
-			ShowError("Failed to send data.");
-			noBytes = 0;
-		}
+	#ifdef __linux__ 
+		close( this->socket );
+	#elif _WIN32
+		::closesocket( this->socket_handle );
+	#endif
+
+		this->socket_handle = INVALID_SOCKET;
 	}
 
-	return noBytes;
-}
-
-// Receives a message from partner socket 
-int FtpSocket::ReceiveMessage(void* pDataBuffer, int bufferSize)
-{
-	int noBytes = 0;	// number of bytes received
-
-	if ((pDataBuffer != NULL) && (bufferSize > 0))
+	// Sends a message to partner socket
+	int
+	socket::send_message(
+		void* buffer,
+		std::size_t buffer_size ) const noexcept
 	{
-		noBytes = recv(_socket, (char *)pDataBuffer, bufferSize, 0);
-		if (noBytes == SOCKET_ERROR)
+		auto bytes_sent = 0;
+
+		if ( buffer != nullptr )
 		{
-			ShowError("Failed to receive data.");
-			noBytes = 0;
+			bytes_sent = ::send( this->socket_handle, static_cast< char* >( buffer ), buffer_size, 0 );
+
+			if ( bytes_sent == SOCKET_ERROR )
+			{
+				std::cerr << "Failed to send data.";
+				bytes_sent = 0;
+			}
 		}
+
+		return bytes_sent;
 	}
 
-	return noBytes;
-}
-
-// Receives all pending messages from partner socket 
-int FtpSocket::ReceiveMessageAll(void* pDataBuffer, int bufferSize)
-{
-	int noBytes = 0;	// total number of bytes received
-
-	while (noBytes < bufferSize)
+	// Receives a message from partner socket 
+	int
+	socket::receive_message(
+		void* buffer,
+		std::size_t buffer_size ) const noexcept
 	{
-		unsigned char* pBuffer = (unsigned char *)pDataBuffer + noBytes;
-		int maxSize = bufferSize - noBytes;
-		int recvSize = ReceiveMessage((void *)pBuffer, maxSize);
+		auto bytes_received = 0;
 
-		if (recvSize > 0)
+		if ( buffer != nullptr )
 		{
-			noBytes += recvSize;
+			bytes_received = ::recv( this->socket_handle, static_cast< char* >( buffer ), buffer_size, 0 );
+
+			if ( bytes_received == SOCKET_ERROR )
+			{
+				std::cerr << "Failed to receive data.";
+				bytes_received = 0;
+			}
 		}
-		else
-		{
-			break;
-		}
+
+		return bytes_received;
 	}
 
-	return noBytes;
+	// Receives all pending messages from partner socket 
+	int
+	socket::receive_message_all(
+		void* buffer,
+		std::size_t buffer_size ) const noexcept
+	{
+		auto bytes_received = 0;
+
+		while ( bytes_received < buffer_size )
+		{
+			auto* offsetted_buffer = static_cast< unsigned char* >( buffer ) + bytes_received;
+
+			const auto max_size = buffer_size - bytes_received;
+			const auto size_received = this->receive_message( static_cast< void* >( offsetted_buffer ), max_size );
+
+			if ( size_received > 0)
+			{
+				bytes_received += size_received;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		return bytes_received;
+	}
 }

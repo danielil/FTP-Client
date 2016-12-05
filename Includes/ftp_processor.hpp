@@ -1,13 +1,11 @@
 /**
  * Daniel Sebastian Iliescu, http://dansil.net
  * MIT License (MIT), http://opensource.org/licenses/MIT
- *
- * This file contains the definition of the FTP processor.
  */
 
 #include "socket.hpp"
 
-#include <string>
+#include <array>
 
 /*
 	 Access Control Commands
@@ -50,64 +48,78 @@
 		NOOP <CRLF>							No operation (no action)
 */
 
-// Message buffer size
-static constexpr FTP_MAX_MSG = 4096;
-
-// Class implementing an FTP client operating in Passive mode
-// It connects two sockets to the FTP server, one for commands
-// and the other one for data.
-class ftp_processor
+namespace networking
 {
-public:
-	FtpObj();
-	virtual ~FtpObj();
+	// Class implementing an FTP client operating in Passive mode
+	// It connects two sockets to the FTP server, one for commands
+	// and the other one for data.
+	class ftp_processor
+	{
+	public:
+		ftp_processor() = default;
+		virtual ~ftp_processor() noexcept;
 
-	// Connection
-	bool IsConnected();
-	bool IsDataConnected();
-	bool Connect(const char* hostAddress, int port = 0);
-	void Disconnect(bool full);
+		ftp_processor( ftp_processor& const ) = delete;
+		ftp_processor( ftp_processor&& ) noexcept = delete;
 
-	// Commands
-	bool FtpCommand(const char* command, const char* param = NULL);
-	void Terminate();
-	bool SetTransferType(bool bType);
-	bool SendUserName(const char* name);
-	bool SendUserPassword(const char* password);
-	bool ShowOS();
-	bool ListDir();
-	bool ListDirName();
-	bool GetDir();
-	bool SetDir(const char* directory);
-	bool SetDirToParent();
-	bool RemDir(const char* directory);
-	bool MakeDir(const char* directory);
-	bool Reinitialize();
-	bool Status();
-	bool DelFile(const char* fileName);
-	bool GetFile(const char* fileName);
-	bool PutFile(const char* fileName);
+		ftp_processor& operator=( ftp_processor const & ) = delete;
+		ftp_processor& operator=( ftp_processor&& ) noexcept = delete;
 
-	// Getters
-	std::string GetHostAddress();
+		// Connection
+		bool is_connected() const noexcept;
+		bool is_data_connected() const noexcept;
+		bool connect(
+			std::string const & host_address,
+			std::uint16_t port = 0 );
+		void disconnect( bool full );
 
-private:
-	FtpObj(const FtpObj&);
-	FtpObj& operator =(const FtpObj&);
+		// Commands
+		bool ftp_command(
+			std::string const & command,
+			std::string const & param );
+		void terminate();
+		bool set_transfer_type( bool type );
+		bool send_user_name( std::string const & name );
+		bool send_user_password( std::string const & password );
+		bool show_os();
+		bool list_directories();
+		bool list_directory_name();
+		bool get_directory();
+		bool set_directory( std::string const & directory );
+		bool set_directory_to_parent();
+		bool remove_directory( std::string const & directory );
+		bool make_directory( std::string const & directory );
+		bool reinitialize();
+		bool status();
+		bool delete_file( std::string const & filename );
+		bool get_file( std::string const & filename );
+		bool put_file( std::string const & filename );
 
-	// Helper methods
-	void Init();
-	bool SendPASV();
-	bool StartDataConnection(const char* dataCommand, const char* dataParam = NULL);
-	void StopDataConnection(bool abort = true);
-	bool SendCommand();
-	bool ReceiveReply();
+		std::string get_host_address() const noexcept;
 
-	// Data members
-	FtpSocket* _commandSocket;		// command socket
-	FtpSocket* _dataSocket;			// data socket
-	char _message[FTP_MAX_MSG];		// message buffer
-	bool _transferType;				// FALSE/TRUE: Binary/ASCII
-	std::string _hostAddress;		// host address
-	int _dataPort;					// port for transferring data
-};
+	private:
+		void init();
+		bool send_pasv();
+		bool start_data_connection(
+			std::string const & command,
+			std::string const & parameter );
+		void stop_data_connection( bool abort );
+		bool send_command();
+		bool receive_reply();
+
+		// Command socket
+		socket command_socket;
+		// Data socket
+		socket data_socket;
+		// Max message size
+		static constexpr auto FTP_MAX_MSG = 4096;
+		// Message buffer
+		std::array< char, FTP_MAX_MSG > message {};
+		// True for ASCII, false for binary
+		bool transfer_type = false;
+		// Host address
+		std::string host_address;
+		// Port for transferring data
+		std::uint16_t data_port = 0;
+	};
+}
