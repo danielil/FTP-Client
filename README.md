@@ -6,11 +6,11 @@ An FTP Client Running in Passive Mode implemented in C++.
 About
 ------------------
 
-version: `1.0.0`
-author: `Daniel Sebastian Iliescu, http://dansil.net`
-license: `MIT License (MIT), http://opensource.org/licenses/MIT`
-created: `2014-12-12`
-updated: '2016-12-04'
+version: `1.0.0`  
+author: `Daniel Sebastian Iliescu, http://dansil.net`  
+license: `MIT License (MIT), http://opensource.org/licenses/MIT`  
+created: `2014-12-12`  
+updated: '2016-12-04'  
 
 Usage
 ------------------
