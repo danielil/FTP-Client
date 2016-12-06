@@ -50,16 +50,16 @@
 
 namespace networking
 {
-	// Class implementing an FTP client operating in Passive mode
-	// It connects two sockets to the FTP server, one for commands
-	// and the other one for data.
+	// Class implementing an FTP client operating in passive mode.
+	// It connects two sockets to the FTP server; one for commands
+	// and one for data.
 	class ftp_processor
 	{
 	public:
 		ftp_processor() = default;
 		virtual ~ftp_processor() noexcept;
 
-		ftp_processor( ftp_processor& const ) = delete;
+		ftp_processor( ftp_processor const & ) = delete;
 		ftp_processor( ftp_processor&& ) noexcept = delete;
 
 		ftp_processor& operator=( ftp_processor const & ) = delete;
@@ -75,8 +75,8 @@ namespace networking
 
 		// Commands
 		bool ftp_command(
-			std::string const & command,
-			std::string const & param );
+			const std::string command,
+			const std::string parameter );
 		void terminate();
 		bool set_transfer_type( bool type );
 		bool send_user_name( std::string const & name );

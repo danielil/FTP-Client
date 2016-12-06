@@ -162,7 +162,7 @@ namespace networking
 		void* buffer,
 		std::size_t buffer_size ) const noexcept
 	{
-		auto bytes_received = 0;
+		std::size_t bytes_received = 0;
 
 		while ( bytes_received < buffer_size )
 		{
