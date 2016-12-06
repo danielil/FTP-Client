@@ -9,7 +9,9 @@
 #include <stdlib.h>
 #include <string>
 
-#ifdef _WIN32
+#ifdef __linux__
+	#include <unistd.h>
+#elif _WIN32
 	#include <Windows.h>
 	#include <lmcons.h>
 #endif

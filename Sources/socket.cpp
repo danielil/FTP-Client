@@ -19,6 +19,7 @@
 	using LPIN_ADDR = struct in_addr*;
 
 	static constexpr auto SOCKET_ERROR = -1;
+	static constexpr auto INVALID_SOCKET = -1;
 #elif _WIN32
 	#include <WinSock2.h>
 #endif
@@ -104,7 +105,7 @@ namespace networking
 	socket::close() noexcept
 	{
 	#ifdef __linux__ 
-		close( this->socket );
+		::close( this->socket_handle );
 	#elif _WIN32
 		::closesocket( this->socket_handle );
 	#endif

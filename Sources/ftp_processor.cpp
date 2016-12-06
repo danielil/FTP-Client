@@ -5,6 +5,7 @@
 
 #include "ftp_processor.hpp"
 
+#include <cstring>
 #include <iostream>
 #include <stdlib.h>
 #include <sstream>
@@ -167,7 +168,7 @@ namespace networking
 		{
 			std::fill( std::begin( this->message ), std::end( this->message ), 0 );
 
-			while ( this->data_socket.receive_message( static_cast<void *>( this->message.data() ), std::strlen( this->message.data() ) - 1 ) != 0 )
+			while ( this->data_socket.receive_message( static_cast<void *>( this->message.data() ), strlen( this->message.data() ) - 1 ) != 0 )
 			{
 				// Retrieves the directory content and displays it on the console
 				std::fill( std::begin( this->message ), std::end( this->message ), 0 );
@@ -194,7 +195,7 @@ namespace networking
 		{
 			std::fill( std::begin( this->message ), std::end( this->message ), 0 );
 
-			while ( this->data_socket.receive_message( static_cast< void* >( this->message.data() ), std::strlen( this->message.data() ) - 1 ) != 0 )
+			while ( this->data_socket.receive_message( static_cast< void* >( this->message.data() ), strlen( this->message.data() ) - 1 ) != 0 )
 			{
 				// Retrieves the directory content and displays it on the console
 				std::fill( std::begin( this->message ), std::end( this->message ), 0 );
@@ -277,7 +278,7 @@ namespace networking
 	{
 		if ( this->is_connected() )
 		{
-			std::ios_base::open_mode mode = std::ios_base::out;
+			std::ios_base::openmode mode = std::ios_base::out;
 			
 			if ( this->transfer_type )
 			{
@@ -296,7 +297,7 @@ namespace networking
 					{
 						std::fill( std::begin( this->message ), std::end( this->message ), 0 );
 
-						auto bytes = this->data_socket.receive_message( static_cast< void* >( this->message.data() ), std::strlen( this->message.data() ) );
+						auto bytes = this->data_socket.receive_message( static_cast< void* >( this->message.data() ), strlen( this->message.data() ) );
 
 						if ( bytes == 0 )
 						{
@@ -323,7 +324,7 @@ namespace networking
 	{
 		if ( this->is_connected() )
 		{
-			std::ios_base::open_mode mode = std::ios_base::in;
+			std::ios_base::openmode mode = std::ios_base::in;
 
 			if ( this->transfer_type )
 			{
@@ -345,7 +346,7 @@ namespace networking
 
 						input >> this->message.data();
 
-						if ( this->data_socket.send_message( static_cast< void* >( this->message.data() ), std::strlen( this->message.data() ) ) == 0 )
+						if ( this->data_socket.send_message( static_cast< void* >( this->message.data() ), strlen( this->message.data() ) ) == 0 )
 						{
 							return false;
 						}
@@ -402,7 +403,7 @@ namespace networking
 			std::uint16_t port = 0;
 
 			auto position = 1;
-			for ( std::size_t idx = std::strlen( this->message.data() ) - 1; idx > 0; --idx )
+			for ( std::size_t idx = strlen( this->message.data() ) - 1; idx > 0; --idx )
 			{
 				if ( ::isdigit( static_cast< int >( this->message.data()[idx] ) ) )
 				{
@@ -499,18 +500,18 @@ namespace networking
 		{
 			std::fill( std::begin( this->message ), std::end( this->message ), 0 );
 
-			if ( this->command_socket.receive_message( static_cast< void* >( this->message.data() ), std::strlen( this->message.data() ) ) )
+			if ( this->command_socket.receive_message( static_cast< void* >( this->message.data() ), strlen( this->message.data() ) ) )
 			{
 				// Check reply
 				auto position = 0;
-				const auto maximum_position = static_cast< int >( std::strlen( this->message.data() ) ) - 5;
+				const auto maximum_position = static_cast< int >( strlen( this->message.data() ) ) - 5;
 
 				std::cout << this->message.data();
 				while ( ( position < maximum_position ) &&
-						( this->message.data()[position + 0] == '-' ) ||
-						( this->message.data()[position + 1] == ' ' ) &&
+						( ( this->message.data()[position + 0] == '-' ) ||
+						( ( this->message.data()[position + 1] == ' ' ) &&
 						( this->message.data()[position + 2] == ' ' ) &&
-						( this->message.data()[position + 3] == ' ' ) )
+						( this->message.data()[position + 3] == ' ' ) ) ) )
 				{
 					// Skip continuation lines (denoted by dash or spaces)
 					const auto length = maximum_position - position;

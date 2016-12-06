@@ -10,7 +10,7 @@ version: `1.0.0`
 author: `Daniel Sebastian Iliescu, http://dansil.net`  
 license: `MIT License (MIT), http://opensource.org/licenses/MIT`  
 created: `2014-12-12`  
-updated: '2016-12-05'
+updated: `2016-12-05`  
 
 Usage
 ------------------
